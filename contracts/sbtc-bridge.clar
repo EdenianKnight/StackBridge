@@ -240,7 +240,7 @@
 )
 
 (define-public (recover-pubkey (hash (buff 32)) (signature (buff 65)))
-  (ok 0x000000000000000000000000000000000000000) ;; Placeholder
+  (ok 0x0000000000000000000000000000000000000000) ;; Placeholder - 20-byte buffer (40 hex chars)
 )
 
 (define-public (verify-tx (tx-id (buff 32)) (signature (buff 65)) (amount uint256))
