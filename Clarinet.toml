@@ -9,6 +9,11 @@ requirements = []
 path = 'contracts/sbtc-bridge.clar'
 clarity_version = 3
 epoch = 3.1
+
+[contracts.sbtc-token]
+path = 'contracts/sbtc-token.clar'
+clarity_version = 3
+epoch = 3.1
 [repl.analysis]
 passes = ['check_checker']
 
