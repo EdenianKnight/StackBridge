@@ -16,7 +16,7 @@
 (set-oracle (principal) (response bool uint256))
 (get-oracle () (response principal uint256))
 (set-bridge-state (bool) (response bool uint256))
-(get-bridge-state() (response bool uint256))
+(get-bridge-state () (response bool uint256))
 (get-locked-balance (principal) (response uint256 uint256))
 (get-total-supply () (response uint256 uint256))
 (set-token-contract (principal) (response bool uint256))
@@ -39,17 +39,17 @@
 (define-constant ERR-INVALID-PRINCIPAL (err u109))
 
 ;; Data Vars
-(define-data-var oracle principal tx-sender) ; Initially set to deployer, can be changed.
-(define-data-var bridge-state bool true)  ; true = operational, false = paused.
+(define-data-var oracle principal tx-sender) ;; Initially set to deployer, can be changed.
+(define-data-var bridge-state bool true)  ;; true = operational, false = paused.
 (define-data-var total-sbtc-supply uint256 u0)
-(define-data-var sbtc-token-contract principal tx-sender) ; contract to call for minting/burning
-(define-data-var contract-locked bool false) ; Used to prevent re-initialization
+(define-data-var sbtc-token-contract principal tx-sender) ;; contract to call for minting/burning
+(define-data-var contract-locked bool false) ;; Used to prevent re-initialization
 
 
 ;; Maps
 (define-map locked-balances { account: principal } { amount: uint256 })
 (define-map spent-tx-ids { tx-id: (buff 32) } { spent: bool })
-(define-map tx-signatures { tx-id: (buff 32) } { signatures: (list 20 (buff 65)) }) ; Store up to 20 sigs per tx.
+(define-map tx-signatures { tx-id: (buff 32) } { signatures: (list 20 (buff 65)) }) ;; Store up to 20 sigs per tx.
 
 
 ;; Helper Functions
@@ -91,10 +91,10 @@
 )
 
 (define-private (assert-token-contract)
-(if (is-eq (var-get sbtc-token-contract) tx-sender) ; Check if it's the deployer.
+(if (is-eq (var-get sbtc-token-contract) tx-sender) ;; Check if it's the deployer.
 (ok true)
-(ok true) ; Allow anyone to call if not set.  The mint/burn will fail in the token contract if not authorized.
-;(err ERR-TOKEN-CONTRACT-MISSING) ; Removed this check
+(ok true) ;; Allow anyone to call if not set.  The mint/burn will fail in the token contract if not authorized.
+;;(err ERR-TOKEN-CONTRACT-MISSING) ;; Removed this check
 )
 )
 
@@ -157,7 +157,7 @@
 (begin
 (try! (assert-bridge-active))
 (try! (assert-not-spent tx-id))
-(try! (assert-token-contract)) ; Ensure token contract is set before minting.
+(try! (assert-token-contract)) ;; Ensure token contract is set before minting.
 
 (let* (
 (sender tx-sender)
@@ -191,7 +191,7 @@
 (begin
 (try! (assert-bridge-active))
 (try! (assert-not-spent tx-id))
-(try! (assert-token-contract)) ; Ensure token contract is set before burning.
+(try! (assert-token-contract)) ;; Ensure token contract is set before burning.
 (let* (
 (sender tx-sender)
 (current-balance (get-locked-balance sender))
@@ -225,11 +225,11 @@
 ;;  `secp256k1-recover` and proper hash handling, and potentially a separate contract.
 ;;  This simplified version is INSECURE and should NOT be used in production.
 (define-public (is-valid-signature (tx-id (buff 32)) (signature (buff 65)) (sender principal))
-(ok true) ; Simulate valid signature for demonstration.  REPLACE THIS.
+(ok true) ;; Simulate valid signature for demonstration.  REPLACE THIS.
 )
 
 (define-public (recover-pubkey (hash (buff 32)) (signature (buff 65)))
-(ok (buff-to-principal (hex-to-ascii "0x0000000000000000000000000000000000000000"))) ; Placeholder
+(ok (buff-to-principal (hex-to-ascii "0x0000000000000000000000000000000000000000"))) ;; Placeholder
 )
 
 (define-public (verify-tx (tx-id (buff 32)) (signature (buff 65)) (amount uint256))
