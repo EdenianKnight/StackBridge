@@ -6,6 +6,7 @@
 (define-constant CONTRACT-OWNER tx-sender)
 (define-constant ERR-UNAUTHORIZED (err u101))
 (define-constant ERR-INVALID-AMOUNT (err u102))
+(define-constant ERR-INSUFFICIENT-SUPPLY (err u500))
 
 (define-data-var token-name (string-ascii 32) "Stacks Bitcoin")
 (define-data-var token-symbol (string-ascii 6) "sBTC")
@@ -13,12 +14,10 @@
 (define-data-var total-supply uint u0)
 
 ;; --- Authorization Check ---
-;; Only allow the contract owner (deployer) or potentially the bridge contract to mint/burn
-;; In a real bridge, you'd likely grant authorization specifically to the bridge contract address.
-(define-private (is-authorized)
-  (ok (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-UNAUTHORIZED)) ;; Simple check: only deployer
+(define-public (is-authorized (caller principal))
+  (ok (is-eq caller CONTRACT-OWNER)) ;; Simple check: only deployer
   ;; To allow the bridge contract:
-  ;; (ok (asserts! (is-eq tx-sender .sbtc-bridge) ERR-UNAUTHORIZED)) ;; Replace .sbtc-bridge with the actual deployed bridge contract ID
+  ;; (ok (is-eq caller .sbtc-bridge)) ;; Replace .sbtc-bridge with the actual deployed bridge contract ID
 )
 
 ;; --- Public Functions ---
@@ -55,23 +54,34 @@
 (define-public (mint (amount uint) (recipient principal))
   (begin
     (asserts! (> amount u0) ERR-INVALID-AMOUNT) ;; Check for valid amount
-    (try! (is-authorized)) ;; Ensure caller is authorized (e.g., the bridge contract)
-    (let ((new-supply (+ (var-get total-supply) amount)))
-      (var-set total-supply new-supply)
+    
+    ;; Verify authorization
+    (let ((auth-result (is-authorized tx-sender)))
+      (asserts! (is-ok auth-result) ERR-UNAUTHORIZED)
+      (asserts! (unwrap-panic auth-result) ERR-UNAUTHORIZED)
+      
+      ;; Update supply and mint tokens
+      (var-set total-supply (+ (var-get total-supply) amount))
       (ft-mint? sbtc amount recipient)
     )
   )
 )
 
-(define-public (burn (amount uint) (owner principal))
+(define-public (burn (amount uint))
   (begin
     (asserts! (> amount u0) ERR-INVALID-AMOUNT) ;; Check for valid amount
-    (try! (is-authorized)) ;; Ensure caller is authorized
-    (asserts! (is-eq tx-sender owner) ERR-UNAUTHORIZED) ;; Ensure the owner is initiating the burn via the bridge
-    (let ((new-supply (- (var-get total-supply) amount)))
-      (asserts! (>= (var-get total-supply) amount) (err u500)) ;; Ensure sufficient total supply
-      (var-set total-supply new-supply)
-      (ft-burn? sbtc amount owner)
+    
+    ;; Verify authorization
+    (let ((auth-result (is-authorized tx-sender)))
+      (asserts! (is-ok auth-result) ERR-UNAUTHORIZED)
+      (asserts! (unwrap-panic auth-result) ERR-UNAUTHORIZED)
+      
+      ;; Check sufficient supply
+      (asserts! (>= (var-get total-supply) amount) ERR-INSUFFICIENT-SUPPLY)
+      
+      ;; Update supply and burn tokens
+      (var-set total-supply (- (var-get total-supply) amount))
+      (ft-burn? sbtc amount tx-sender)
     )
   )
 )
