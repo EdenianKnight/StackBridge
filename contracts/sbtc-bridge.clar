@@ -63,8 +63,7 @@
 )
 
 (define-private (record-spent-tx (tx-id (buff 32)))
-  (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
-  (ok true)
+  (ok (map-insert spent-tx-ids { tx-id: tx-id } { spent: true }))
 )
 
 (define-read-only (is-tx-spent (tx-id (buff 32)))
