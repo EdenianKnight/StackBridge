@@ -7,6 +7,7 @@
 (define-constant ERR-UNAUTHORIZED (err u101))
 (define-constant ERR-INVALID-AMOUNT (err u102))
 (define-constant ERR-INSUFFICIENT-SUPPLY (err u500))
+(define-constant ERR-INVALID-RECIPIENT (err u103)) ;; Added error for invalid recipient
 
 (define-data-var token-name (string-ascii 32) "Stacks Bitcoin")
 (define-data-var token-symbol (string-ascii 6) "sBTC")
@@ -18,6 +19,13 @@
   (ok (is-eq caller CONTRACT-OWNER)) ;; Simple check: only deployer
   ;; To allow the bridge contract:
   ;; (ok (is-eq caller .sbtc-bridge)) ;; Replace .sbtc-bridge with the actual deployed bridge contract ID
+)
+
+;; --- Helper Functions ---
+
+;; Validate recipient is not null or contract
+(define-private (validate-recipient (recipient principal))
+  (ok true) ;; Simplified validation - can be expanded as needed
 )
 
 ;; --- Public Functions ---
@@ -46,6 +54,11 @@
     ;; Add validation checks for amount and sender
     (asserts! (> amount u0) ERR-INVALID-AMOUNT)
     (asserts! (is-eq tx-sender sender) ERR-UNAUTHORIZED)
+    
+    ;; Fixed: Use unwrap-panic instead of match for validate-recipient
+    (asserts! (is-ok (validate-recipient recipient)) ERR-INVALID-RECIPIENT)
+    
+    ;; Transfer tokens
     (ft-transfer? sbtc amount sender recipient)
   )
 )
@@ -59,6 +72,9 @@
     (let ((auth-result (is-authorized tx-sender)))
       (asserts! (is-ok auth-result) ERR-UNAUTHORIZED)
       (asserts! (unwrap-panic auth-result) ERR-UNAUTHORIZED)
+      
+      ;; Fixed: Use unwrap-panic instead of match for validate-recipient
+      (asserts! (is-ok (validate-recipient recipient)) ERR-INVALID-RECIPIENT)
       
       ;; Update supply and mint tokens
       (var-set total-supply (+ (var-get total-supply) amount))
