@@ -38,9 +38,6 @@
   )
 )
 
-;; Import the token trait to use with contract-call?
-(use-trait token-trait 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.sbtc-bridge.sbtc-token-trait)
-
 ;; Error Constants
 (define-constant ERR-INVALID-SIGNATURE (err u100))
 (define-constant ERR-INVALID-TX-ID (err u101))
@@ -167,7 +164,7 @@
 )
 
 ;; sBTC Locking and Minting
-(define-public (lock-sbtc (amount uint) (recipient principal) (tx-id (buff 32)) (signature (buff 65)) (token-contract <token-trait>))
+(define-public (lock-sbtc (amount uint) (recipient principal) (tx-id (buff 32)) (signature (buff 65)))
   (begin
     ;; First, check basic conditions
     (asserts! (is-bridge-active) ERR-BRIDGE-PAUSED)
@@ -175,9 +172,7 @@
     (asserts! (> amount u0) ERR-INVALID-AMOUNT)
     
     ;; Check token contract
-    (let ((expected-contract (var-get sbtc-token-contract)))
-      (asserts! (is-eq (contract-of token-contract) expected-contract) ERR-TOKEN-CONTRACT-MISSING)
-      
+    (let ((token-contract (var-get sbtc-token-contract)))
       ;; Check signature
       (let ((valid-sig-result (unwrap-panic (is-valid-signature tx-id signature tx-sender))))
         (asserts! valid-sig-result ERR-INVALID-SIGNATURE)
@@ -191,14 +186,17 @@
           (map-set locked-balances { account: sender } { amount: new-balance })
           (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
           
-          ;; Mint sBTC on Stacks
-          (match (contract-call? token-contract mint amount recipient)
-            mint-success (begin
-              ;; Update state and return
-              (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
-              (ok new-balance)
-            )
-            mint-error (err mint-error))
+          ;; Mint sBTC on Stacks - this now uses a simple contract-call to the token contract
+          ;; without trait references, just using the contract principal
+          (let ((mint-result (contract-call? token-contract mint amount recipient)))
+            (match mint-result
+              mint-success (begin
+                ;; Update state and return
+                (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
+                (ok new-balance)
+              )
+              mint-error (err mint-error))
+          )
         )
       )
     )
@@ -206,7 +204,7 @@
 )
 
 ;; sBTC Unlocking and Burning
-(define-public (unlock-sbtc (amount uint) (tx-id (buff 32)) (signature (buff 65)) (token-contract <token-trait>))
+(define-public (unlock-sbtc (amount uint) (tx-id (buff 32)) (signature (buff 65)))
   (begin
     ;; First, check basic conditions
     (asserts! (is-bridge-active) ERR-BRIDGE-PAUSED)
@@ -214,9 +212,7 @@
     (asserts! (> amount u0) ERR-INVALID-AMOUNT)
     
     ;; Check token contract
-    (let ((expected-contract (var-get sbtc-token-contract)))
-      (asserts! (is-eq (contract-of token-contract) expected-contract) ERR-TOKEN-CONTRACT-MISSING)
-      
+    (let ((token-contract (var-get sbtc-token-contract)))
       ;; Check signature and balance
       (let ((sender tx-sender)
             (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender })))))
@@ -232,14 +228,17 @@
             (map-set locked-balances { account: sender } { amount: new-balance })
             (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
             
-            ;; Burn sBTC on Stacks
-            (match (contract-call? token-contract burn amount)
-              burn-success (begin
-                ;; Update state and return
-                (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
-                (ok new-balance)
-              )
-              burn-error (err burn-error))
+            ;; Burn sBTC on Stacks - this now uses a simple contract-call to the token contract
+            ;; without trait references, just using the contract principal
+            (let ((burn-result (contract-call? token-contract burn amount)))
+              (match burn-result
+                burn-success (begin
+                  ;; Update state and return
+                  (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
+                  (ok new-balance)
+                )
+                burn-error (err burn-error))
+            )
           )
         )
       )
