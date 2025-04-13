@@ -66,12 +66,12 @@
   (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
 )
 
-(define-private (is-tx-spent (tx-id (buff 32)))
-  (default-to {spent: false} (map-get? spent-tx-ids {tx-id: tx-id}))
+(define-read-only (is-tx-spent (tx-id (buff 32)))
+  (default-to { spent: false } (map-get? spent-tx-ids { tx-id: tx-id }))
 )
 
 (define-private (assert-not-spent (tx-id (buff 32)))
-  (if (is-tx-spent tx-id)
+  (if (get spent (is-tx-spent tx-id))
     (err ERR-INVALID-TX-ID)
     (ok true)
   )
@@ -167,27 +167,29 @@
     (try! (assert-not-spent tx-id))
     (try! (assert-token-contract)) ;; Ensure token contract is set before minting.
 
-    (let* (
-      (sender tx-sender)
-      (valid-sig (try! (is-valid-signature tx-id signature sender)))
-      (current-balance (get amount (get-locked-balance sender)))
-      (new-balance (+ amount current-balance))
-    )
-      (when (not valid-sig)
-        (err ERR-INVALID-SIGNATURE)
-      )
+    ;; Use 'let' instead of 'let*'
+    (let ((sender tx-sender)
+          (valid-sig (try! (is-valid-signature tx-id signature sender)))
+          (current-balance (get amount (get-locked-balance sender)))
+          (new-balance (+ amount current-balance)))
+      
+      ;; Add validation checks
+      (asserts! valid-sig ERR-INVALID-SIGNATURE)
+      (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+      
+      ;; Update balances
       (map-insert locked-balances { account: sender } { amount: new-balance })
       (try! (record-spent-tx tx-id))
 
-      ;; Mint sBTC on Stacks
-      (let* (
-        (token-contract (var-get sbtc-token-contract))
-        (mint-result (contract-call? token-contract mint amount sender))
-        (new-supply (+ (var-get total-sbtc-supply) amount))
-      )
-        (when (is-err mint-result)
-          (err (unwrap-err mint-result))
-        )
+      ;; Mint sBTC on Stacks using nested 'let' instead of 'let*'
+      (let ((token-contract (var-get sbtc-token-contract))
+            (mint-result (contract-call? token-contract mint amount sender))
+            (new-supply (+ (var-get total-sbtc-supply) amount)))
+        
+        ;; Check for errors
+        (asserts! (is-ok mint-result) (unwrap-err mint-result))
+        
+        ;; Update state and return
         (var-set total-sbtc-supply new-supply)
         (ok new-balance)
       )
@@ -202,28 +204,30 @@
     (try! (assert-not-spent tx-id))
     (try! (assert-token-contract)) ;; Ensure token contract is set before burning.
     
-    (let* (
-      (sender tx-sender)
-      (current-balance (get amount (get-locked-balance sender)))
-      (new-balance (- current-balance amount))
-      (valid-sig (try! (is-valid-signature tx-id signature sender)))
-    )
-      (when (not valid-sig)
-        (err ERR-INVALID-SIGNATURE)
-      )
+    ;; Use 'let' instead of 'let*'
+    (let ((sender tx-sender)
+          (current-balance (get amount (get-locked-balance sender)))
+          (new-balance (- current-balance amount))
+          (valid-sig (try! (is-valid-signature tx-id signature sender))))
+      
+      ;; Add validation checks
+      (asserts! valid-sig ERR-INVALID-SIGNATURE)
+      (asserts! (> amount u0) ERR-INVALID-AMOUNT)
       (asserts! (>= current-balance amount) ERR-INVALID-AMOUNT)
+      
+      ;; Update balances
       (map-insert locked-balances { account: sender } { amount: new-balance })
       (try! (record-spent-tx tx-id))
 
-      ;; Burn sBTC on Stacks
-      (let* (
-        (token-contract (var-get sbtc-token-contract))
-        (burn-result (contract-call? token-contract burn amount))
-        (new-supply (- (var-get total-sbtc-supply) amount))
-      )
-        (when (is-err burn-result)
-          (err (unwrap-err burn-result))
-        )
+      ;; Burn sBTC on Stacks using nested 'let' instead of 'let*'
+      (let ((token-contract (var-get sbtc-token-contract))
+            (burn-result (contract-call? token-contract burn amount))
+            (new-supply (- (var-get total-sbtc-supply) amount)))
+        
+        ;; Check for errors
+        (asserts! (is-ok burn-result) (unwrap-err burn-result))
+        
+        ;; Update state and return
         (var-set total-sbtc-supply new-supply)
         (ok new-balance)
       )
