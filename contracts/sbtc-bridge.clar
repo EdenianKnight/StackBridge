@@ -176,30 +176,32 @@
       (let ((sender tx-sender)
             (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender })))))
         
-        ;; Fixed: Using unwrap-panic instead of match for valid-sig
-        (let ((valid-sig-result (try! (is-valid-signature tx-id signature sender))))
-          (if valid-sig-result
-            (begin
-              ;; Validate the amount
-              (asserts! (> amount u0) ERR-INVALID-AMOUNT)
-              
-              ;; Update balances
-              (let ((new-balance (+ amount current-balance)))
-                (map-set locked-balances { account: sender } { amount: new-balance })
-                (try! (record-spent-tx tx-id))
+        ;; Fixed: Using direct check of the result instead of try!
+        (let ((valid-sig (is-valid-signature tx-id signature sender)))
+          (if (is-ok valid-sig)
+            (if (unwrap-panic valid-sig)
+              (begin
+                ;; Validate the amount
+                (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+                
+                ;; Update balances
+                (let ((new-balance (+ amount current-balance)))
+                  (map-set locked-balances { account: sender } { amount: new-balance })
+                  (try! (record-spent-tx tx-id))
 
-                ;; Mint sBTC on Stacks
-                (let ((token-contract (var-get sbtc-token-contract)))
-                  (match (contract-call? token-contract mint amount recipient)
-                    mint-success (begin
-                      ;; Update state and return
-                      (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
-                      (ok new-balance)
-                    )
-                    mint-error (err mint-error))
+                  ;; Mint sBTC on Stacks
+                  (let ((token-contract (var-get sbtc-token-contract)))
+                    (match (contract-call? token-contract mint amount recipient)
+                      mint-success (begin
+                        ;; Update state and return
+                        (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
+                        (ok new-balance)
+                      )
+                      mint-error (err mint-error))
+                  )
                 )
               )
-            )
+              (err ERR-INVALID-SIGNATURE))
             (err ERR-INVALID-SIGNATURE))
         )
       )
@@ -219,32 +221,34 @@
       (let ((sender tx-sender)
             (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender })))))
         
-        ;; Fixed: Using unwrap-panic instead of match for valid-sig
-        (let ((valid-sig-result (try! (is-valid-signature tx-id signature sender))))
-          (if valid-sig-result
-            (begin
-              ;; Validate amounts
-              (asserts! (> amount u0) ERR-INVALID-AMOUNT)
-              (asserts! (>= current-balance amount) ERR-INVALID-AMOUNT)
-              
-              ;; Calculate new balance
-              (let ((new-balance (- current-balance amount)))
-                ;; Update balances
-                (map-set locked-balances { account: sender } { amount: new-balance })
-                (try! (record-spent-tx tx-id))
+        ;; Fixed: Using direct check of the result instead of try!
+        (let ((valid-sig (is-valid-signature tx-id signature sender)))
+          (if (is-ok valid-sig)
+            (if (unwrap-panic valid-sig)
+              (begin
+                ;; Validate amounts
+                (asserts! (> amount u0) ERR-INVALID-AMOUNT)
+                (asserts! (>= current-balance amount) ERR-INVALID-AMOUNT)
+                
+                ;; Calculate new balance
+                (let ((new-balance (- current-balance amount)))
+                  ;; Update balances
+                  (map-set locked-balances { account: sender } { amount: new-balance })
+                  (try! (record-spent-tx tx-id))
 
-                ;; Burn sBTC on Stacks
-                (let ((token-contract (var-get sbtc-token-contract)))
-                  (match (contract-call? token-contract burn amount)
-                    burn-success (begin
-                      ;; Update state and return
-                      (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
-                      (ok new-balance)
-                    )
-                    burn-error (err burn-error))
+                  ;; Burn sBTC on Stacks
+                  (let ((token-contract (var-get sbtc-token-contract)))
+                    (match (contract-call? token-contract burn amount)
+                      burn-success (begin
+                        ;; Update state and return
+                        (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
+                        (ok new-balance)
+                      )
+                      burn-error (err burn-error))
+                  )
                 )
               )
-            )
+              (err ERR-INVALID-SIGNATURE))
             (err ERR-INVALID-SIGNATURE))
         )
       )
