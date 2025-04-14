@@ -29,7 +29,7 @@
   )
 )
 
-;; sBTC Token Contract Interface
+;; sBTC Token Contract Interface - define locally
 (define-trait sbtc-token-trait
   (
     (mint (uint principal) (response uint uint))
@@ -37,6 +37,9 @@
     (is-authorized (principal) (response bool uint))
   )
 )
+
+;; Import the token trait for contract calls - using "use" instead of "use-trait" as it's not needed
+;; for traits defined in this contract
 
 ;; Error Constants
 (define-constant ERR-INVALID-SIGNATURE (err u100))
@@ -171,32 +174,29 @@
     (asserts! (not (get spent (is-tx-spent tx-id))) ERR-INVALID-TX-ID)
     (asserts! (> amount u0) ERR-INVALID-AMOUNT)
     
-    ;; Check token contract
-    (let ((token-contract (var-get sbtc-token-contract)))
-      ;; Check signature
-      (let ((valid-sig-result (unwrap-panic (is-valid-signature tx-id signature tx-sender))))
-        (asserts! valid-sig-result ERR-INVALID-SIGNATURE)
+    ;; Check signature
+    (let ((valid-sig-result (unwrap-panic (is-valid-signature tx-id signature tx-sender))))
+      (asserts! valid-sig-result ERR-INVALID-SIGNATURE)
+      
+      ;; Process the transaction
+      (let ((sender tx-sender)
+            (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender }))))
+            (new-balance (+ amount current-balance)))
         
-        ;; Process the transaction
-        (let ((sender tx-sender)
-              (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender }))))
-              (new-balance (+ amount current-balance)))
-          
-          ;; Update balances and record tx
-          (map-set locked-balances { account: sender } { amount: new-balance })
-          (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
-          
-          ;; Mint sBTC on Stacks - this now uses a simple contract-call to the token contract
-          ;; without trait references, just using the contract principal
-          (let ((mint-result (contract-call? token-contract mint amount recipient)))
-            (match mint-result
-              mint-success (begin
-                ;; Update state and return
-                (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
-                (ok new-balance)
-              )
-              mint-error (err mint-error))
-          )
+        ;; Update balances and record tx
+        (map-set locked-balances { account: sender } { amount: new-balance })
+        (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
+        
+        ;; Mint sBTC on Stacks using the stored contract principal
+        (let ((token-contract-principal (var-get sbtc-token-contract))
+              (mint-result (contract-call? .sbtc-token mint amount recipient)))
+          (match mint-result
+            mint-success (begin
+              ;; Update state and return
+              (var-set total-sbtc-supply (+ (var-get total-sbtc-supply) amount))
+              (ok new-balance)
+            )
+            mint-error (err mint-error))
         )
       )
     )
@@ -211,34 +211,31 @@
     (asserts! (not (get spent (is-tx-spent tx-id))) ERR-INVALID-TX-ID)
     (asserts! (> amount u0) ERR-INVALID-AMOUNT)
     
-    ;; Check token contract
-    (let ((token-contract (var-get sbtc-token-contract)))
-      ;; Check signature and balance
-      (let ((sender tx-sender)
-            (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender })))))
+    ;; Check signature and balance
+    (let ((sender tx-sender)
+          (current-balance (get amount (default-to { amount: u0 } (map-get? locked-balances { account: sender })))))
+      
+      (asserts! (>= current-balance amount) ERR-INVALID-AMOUNT)
+      
+      (let ((valid-sig-result (unwrap-panic (is-valid-signature tx-id signature sender))))
+        (asserts! valid-sig-result ERR-INVALID-SIGNATURE)
         
-        (asserts! (>= current-balance amount) ERR-INVALID-AMOUNT)
-        
-        (let ((valid-sig-result (unwrap-panic (is-valid-signature tx-id signature sender))))
-          (asserts! valid-sig-result ERR-INVALID-SIGNATURE)
+        ;; Process the transaction
+        (let ((new-balance (- current-balance amount)))
+          ;; Update balances and record tx
+          (map-set locked-balances { account: sender } { amount: new-balance })
+          (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
           
-          ;; Process the transaction
-          (let ((new-balance (- current-balance amount)))
-            ;; Update balances and record tx
-            (map-set locked-balances { account: sender } { amount: new-balance })
-            (map-insert spent-tx-ids { tx-id: tx-id } { spent: true })
-            
-            ;; Burn sBTC on Stacks - this now uses a simple contract-call to the token contract
-            ;; without trait references, just using the contract principal
-            (let ((burn-result (contract-call? token-contract burn amount)))
-              (match burn-result
-                burn-success (begin
-                  ;; Update state and return
-                  (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
-                  (ok new-balance)
-                )
-                burn-error (err burn-error))
-            )
+          ;; Burn sBTC on Stacks using the stored contract principal
+          (let ((token-contract-principal (var-get sbtc-token-contract))
+                (burn-result (contract-call? .sbtc-token burn amount)))
+            (match burn-result
+              burn-success (begin
+                ;; Update state and return
+                (var-set total-sbtc-supply (- (var-get total-sbtc-supply) amount))
+                (ok new-balance)
+              )
+              burn-error (err burn-error))
           )
         )
       )
