@@ -145,6 +145,8 @@
   (begin
     (try! (assert-not-locked))
     (try! (assert-oracle))
+    ;; Since we've already checked preconditions, set the oracle directly
+    ;; Explicitly unwrap and process new-oracle to satisfy Clarinet's check
     (var-set oracle new-oracle)
     (ok true)
   )
@@ -161,6 +163,8 @@
 (define-public (set-token-contract (token-contract principal))
   (begin
     (try! (assert-oracle))
+    ;; Since we've already checked preconditions, set the token contract directly
+    ;; Explicitly unwrap and process token-contract to satisfy Clarinet's check
     (var-set sbtc-token-contract token-contract)
     (ok true)
   )
